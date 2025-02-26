@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 	"url-shortener/app/config"
 	redis "url-shortener/app/database"
@@ -16,23 +17,44 @@ type Params interface {
 }
 
 func Shorten(params Params) ([]string, error) {
+	start := time.Now()
 	port := config.Port
 	urls := params.GetURL()
 	if len(urls) == 0 {
 		return nil, errors.New("missing URL")
 	}
 
-	var shortenURLs []string
-	for _, url := range urls {
-		shortKey := generateShortKey()
-		err := redis.RedisDB.Set(shortKey, url, 0).Err()
-		if err != nil {
-			return nil, err
-		}
+	var wg sync.WaitGroup
+	shortenURLs := make([]string, len(urls))
+	errCh := make(chan error, len(urls))
 
-		shortURL := fmt.Sprintf("http://localhost:%d/%s", port, shortKey)
-		shortenURLs = append(shortenURLs, shortURL)
+	for i, url := range urls {
+		wg.Add(1)
+
+		go func(index int, originalURL string) {
+			defer wg.Done()
+
+			shortKey := generateShortKey()
+			err := redis.RedisDB.Set(shortKey, originalURL, 0).Err()
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			shortenURLs[index] = fmt.Sprintf("http://localhost:%d/%s", port, shortKey)
+		}(i, url)
 	}
+
+	wg.Wait()
+	close(errCh)
+
+	if len(errCh) > 0 {
+		return nil, <-errCh
+	}
+
+	elapsed := time.Since(start)
+	fmt.Printf("Execution time: %s\n", elapsed)
+
 	return shortenURLs, nil
 }
 
