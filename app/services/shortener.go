@@ -16,6 +16,7 @@ type Params interface {
 }
 
 func Shorten(params Params) ([]string, error) {
+	start := time.Now()
 	port := config.Port
 	urls := params.GetURL()
 	if len(urls) == 0 {
@@ -33,6 +34,9 @@ func Shorten(params Params) ([]string, error) {
 		shortURL := fmt.Sprintf("http://localhost:%d/%s", port, shortKey)
 		shortenURLs = append(shortenURLs, shortURL)
 	}
+
+	elapse := time.Since(start)
+	fmt.Printf("Shorten took %s\n", elapse)
 	return shortenURLs, nil
 }
 
