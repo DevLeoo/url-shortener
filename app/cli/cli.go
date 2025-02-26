@@ -21,8 +21,8 @@ func (p *CLIParams) GetShortKeys() []string {
 }
 
 func shortenWrapper(c *cli.Context) error {
-	url := c.String("urls")
-	urls := strings.Split(url, ",")
+	cliURLParams := c.String("urls")
+	urls := strings.Split(cliURLParams, ",")
 	params := &CLIParams{URL: urls}
 	shortURL, err := services.Shorten(params)
 	if err != nil {
