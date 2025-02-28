@@ -47,7 +47,7 @@ Para executar a aplicação via API, use o comando:
 go run main.go
 ```
 
-A aplicação estará disponível em `http://localhost:8080`.
+A aplicação estará disponível em `http://localhost:3000`.
 
 ## Consumir os recursos
 
@@ -73,15 +73,15 @@ go run main.go key --keys="shortKey1,shortKey2"
 
 #### Encurtar URLs
 
-Para encurtar URLs via API, envie uma solicitação POST para `http://localhost:8080/shorten` com um corpo JSON contendo uma lista de URLs:
+Para encurtar URLs via API, envie uma solicitação POST para `http://localhost:3000/shorten` com um corpo JSON contendo uma lista de URLs:
 
 ```sh
-curl -X POST -H "Content-Type: application/json" -d '["https://example.com", "https://another.com"]' http://localhost:8080/shorten
+curl -X POST -H "Content-Type: application/json" -d '["https://example.com", "https://another.com"]' http://localhost:3000/shorten
 ```
 
 #### Redirecionar URLs
 
-Para redirecionar URLs via API, envie uma solicitação GET para `http://localhost:8080/{shortKey}`, onde `{shortKey}` é a chave curta gerada.
+Para redirecionar URLs via API, envie uma solicitação GET para `http://localhost:3000/{shortKey}`, onde `{shortKey}` é a chave curta gerada.
 
 ## Estrutura do Projeto
 
