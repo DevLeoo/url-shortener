@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 	"url-shortener/app/config"
-	redis "url-shortener/app/database"
+	redisDB "url-shortener/app/database"
 
 	"golang.org/x/exp/rand"
 )
@@ -23,10 +23,16 @@ func Shorten(params Params) ([]string, error) {
 		return nil, errors.New("missing URL")
 	}
 
+	redisClient, err := redisDB.Connect()
+	if err != nil {
+		return nil, err
+	}
+	defer redisClient.Close()
+
 	var shortenURLs []string
 	for _, url := range urls {
 		shortKey := generateShortKey()
-		err := redis.RedisDB.Set(shortKey, url, 0).Err()
+		err := redisClient.Set(shortKey, url, 0).Err()
 		if err != nil {
 			return nil, err
 		}

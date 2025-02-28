@@ -6,17 +6,17 @@ import (
 	"github.com/go-redis/redis"
 )
 
-var RedisDB *redis.Client
-
-func Connect() {
-	RedisDB = redis.NewClient(&redis.Options{
+func Connect() (*redis.Client, error) {
+	redisClient := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
 
-	_, err := RedisDB.Ping().Result()
+	_, err := redisClient.Ping().Result()
 	if err != nil {
 		log.Fatalf("Could not connect to Redis: %v", err)
+		return nil, err
 	}
 	log.Println("Connected to Redis successfully")
 
+	return redisClient, nil
 }
