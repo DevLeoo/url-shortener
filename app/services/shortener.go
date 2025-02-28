@@ -12,8 +12,8 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-const maxShorteningWorkers = 100 // Máximo de goroutines para encurtar URLs
-const maxRedisWorkers = 10       // Máximo de goroutines para inserir no Redis
+const maxShorteningWorkers = 100
+const maxRedisWorkers = 10
 
 type Params interface {
 	GetURL() []string
@@ -51,7 +51,6 @@ func Shorten(params Params) ([]string, error) {
 	jobs := make(chan shortJob, len(urls))
 	results := make(chan redisResult, len(urls))
 
-	// === Fase 1: Criamos o máximo de goroutines para gerar as chaves curtas ===
 	shorteningWg := sync.WaitGroup{}
 	shorteningWg.Add(len(urls))
 	for i, url := range urls {
@@ -62,19 +61,16 @@ func Shorten(params Params) ([]string, error) {
 		}(i, url)
 	}
 
-	// Fechamos o canal de jobs assim que todas as chaves forem geradas
 	go func() {
 		shorteningWg.Wait()
 		close(jobs)
 	}()
 
-	// === Fase 2: Criamos até 10 workers para inserir no Redis ===
 	for w := 0; w < maxRedisWorkers; w++ {
 		wg.Add(1)
 		go redisWorker(&wg, redisClient, jobs, results, port)
 	}
 
-	// Coleta dos resultados
 	for i := 0; i < len(urls); i++ {
 		res := <-results
 		if res.err != nil {
@@ -83,9 +79,9 @@ func Shorten(params Params) ([]string, error) {
 		shortenURLs[res.index] = res.short
 	}
 
-	// Aguarda os workers finalizarem
 	wg.Wait()
 	close(results)
+	close(jobs)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Execution time: %s\n", elapsed)
