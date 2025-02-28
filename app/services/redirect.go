@@ -9,10 +9,15 @@ func RedirectURL(params Params) ([]string, error) {
 	shortKeyParams := params.GetShortKeys()
 
 	var shortKeys []string
+	redisClient, err := redis.Connect()
+	if err != nil {
+		return nil, err
+	}
+	defer redisClient.Close()
 
 	for _, shortKey := range shortKeyParams {
 
-		longURL, err := redis.RedisDB.Get(shortKey).Result()
+		longURL, err := redisClient.Get(shortKey).Result()
 		if err != nil {
 			return nil, errors.New("url not found")
 		}

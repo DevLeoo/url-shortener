@@ -6,14 +6,30 @@ import (
 	"sync"
 	"time"
 	"url-shortener/app/config"
-	redis "url-shortener/app/database"
+	redisDB "url-shortener/app/database"
 
+	"github.com/go-redis/redis"
 	"golang.org/x/exp/rand"
 )
+
+const maxShorteningWorkers = 100 // Máximo de goroutines para encurtar URLs
+const maxRedisWorkers = 10       // Máximo de goroutines para inserir no Redis
 
 type Params interface {
 	GetURL() []string
 	GetShortKeys() []string
+}
+
+type shortJob struct {
+	index    int
+	url      string
+	shortKey string
+}
+
+type redisResult struct {
+	index int
+	short string
+	err   error
 }
 
 func Shorten(params Params) ([]string, error) {
@@ -24,33 +40,52 @@ func Shorten(params Params) ([]string, error) {
 		return nil, errors.New("missing URL")
 	}
 
+	redisClient, err := redisDB.Connect()
+	if err != nil {
+		return nil, err
+	}
+	defer redisClient.Close()
+
 	var wg sync.WaitGroup
 	shortenURLs := make([]string, len(urls))
-	errCh := make(chan error, len(urls))
+	jobs := make(chan shortJob, len(urls))
+	results := make(chan redisResult, len(urls))
 
+	// === Fase 1: Criamos o máximo de goroutines para gerar as chaves curtas ===
+	shorteningWg := sync.WaitGroup{}
+	shorteningWg.Add(len(urls))
 	for i, url := range urls {
-		wg.Add(1)
-
 		go func(index int, originalURL string) {
-			defer wg.Done()
-
+			defer shorteningWg.Done()
 			shortKey := generateShortKey()
-			err := redis.RedisDB.Set(shortKey, originalURL, 0).Err()
-			if err != nil {
-				errCh <- err
-				return
-			}
-
-			shortenURLs[index] = fmt.Sprintf("http://localhost:%d/%s", port, shortKey)
+			jobs <- shortJob{index: index, url: originalURL, shortKey: shortKey}
 		}(i, url)
 	}
 
-	wg.Wait()
-	close(errCh)
+	// Fechamos o canal de jobs assim que todas as chaves forem geradas
+	go func() {
+		shorteningWg.Wait()
+		close(jobs)
+	}()
 
-	if len(errCh) > 0 {
-		return nil, <-errCh
+	// === Fase 2: Criamos até 10 workers para inserir no Redis ===
+	for w := 0; w < maxRedisWorkers; w++ {
+		wg.Add(1)
+		go redisWorker(&wg, redisClient, jobs, results, port)
 	}
+
+	// Coleta dos resultados
+	for i := 0; i < len(urls); i++ {
+		res := <-results
+		if res.err != nil {
+			return nil, res.err
+		}
+		shortenURLs[res.index] = res.short
+	}
+
+	// Aguarda os workers finalizarem
+	wg.Wait()
+	close(results)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Execution time: %s\n", elapsed)
@@ -58,6 +93,20 @@ func Shorten(params Params) ([]string, error) {
 	return shortenURLs, nil
 }
 
+// Worker responsável por inserir no Redis
+func redisWorker(wg *sync.WaitGroup, redisClient *redis.Client, jobs <-chan shortJob, results chan<- redisResult, port int) {
+	defer wg.Done()
+	for j := range jobs {
+		err := redisClient.Set(j.shortKey, j.url, 0).Err()
+		if err != nil {
+			results <- redisResult{index: j.index, err: err}
+			continue
+		}
+		results <- redisResult{index: j.index, short: fmt.Sprintf("http://localhost:%d/%s", port, j.shortKey)}
+	}
+}
+
+// Gera uma chave curta aleatória
 func generateShortKey() string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	rand.Seed(uint64(time.Now().UnixNano()))
